@@ -1,0 +1,180 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Core — HSL space-separated (enables Tailwind opacity modifiers) */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+
+    /* Brand — Laney Red */
+    --primary: 9 97% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --accent: 9 100% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Surfaces */
+    --secondary: 9 30% 96%;
+    --secondary-foreground: 0 0% 10%;
+
+    --muted: 9 15% 94%;
+    --muted-foreground: 0 0% 45%;
+
+    /* UI */
+    --border: 9 20% 90%;
+    --input: 9 20% 90%;
+    --ring: 9 97% 45%;
+    --radius: 0.75rem;
+
+    /* Laney-specific */
+    --laney-peach: 9 100% 97%;
+    --laney-orange: 20 95% 55%;
+    --laney-red: 9 97% 45%;
+    --laney-pink: 350 95% 60%;
+
+    /* Status */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 55% 45%;
+    --success-bg: 152 55% 97%;
+    --error: 0 84% 60%;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 3px hsl(9 97% 45% / 0.06);
+    --shadow-md: 0 4px 16px hsl(9 97% 45% / 0.10);
+    --shadow-lg: 0 8px 32px hsl(9 97% 45% / 0.12);
+    --shadow-xl: 0 16px 48px hsl(9 97% 45% / 0.16);
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: "Inter", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  .btn-gradient {
+    background: linear-gradient(to right, hsl(var(--primary)), hsl(var(--accent)));
+    color: white;
+    box-shadow: 0 4px 14px hsl(var(--primary) / 0.25);
+    transition: box-shadow 0.2s ease, transform 0.15s ease;
+  }
+  .btn-gradient:hover {
+    box-shadow: 0 6px 20px hsl(var(--primary) / 0.35);
+    transform: translateY(-1px);
+  }
+  .btn-gradient:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .icon-gradient-bg {
+    background: linear-gradient(135deg, hsl(var(--laney-peach)), hsl(9 60% 93%));
+    border: 1px solid hsl(var(--primary) / 0.15);
+  }
+
+  .card-elevated {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.8);
+    border-radius: calc(var(--radius) + 4px);
+    box-shadow: 0 4px 20px hsl(0 0% 0% / 0.06);
+  }
+
+  .icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: calc(var(--radius) - 2px);
+    color: hsl(var(--muted-foreground));
+    transition: color 0.15s, background-color 0.15s;
+  }
+  .icon-btn:hover {
+    color: hsl(var(--foreground));
+    background-color: hsl(var(--muted));
+  }
+
+  .text-gradient {
+    background: linear-gradient(to right, hsl(var(--primary)), hsl(var(--accent)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+
+/* Animations */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes completePulse {
+  0%   { box-shadow: 0 0 0 0 hsl(152 55% 45% / 0.35); }
+  70%  { box-shadow: 0 0 0 8px hsl(152 55% 45% / 0); }
+  100% { box-shadow: 0 0 0 0 hsl(152 55% 45% / 0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-8px); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+.animate-fade-slide-up {
+  animation: fadeSlideUp 0.35s ease-out forwards;
+}
+
+.animate-complete-pulse {
+  animation: completePulse 0.6s ease-out;
+}
+
+.animate-float {
+  animation: float 5s ease-in-out infinite;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(139, 115, 85, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 115, 85, 0.5);
+}

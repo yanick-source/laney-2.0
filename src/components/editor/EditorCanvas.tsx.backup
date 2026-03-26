@@ -1,0 +1,513 @@
+import { useCallback, useRef } from "react";
+import type {
+  PhotobookPage,
+  PageElement,
+  EditorTool,
+} from "@/types/editor";
+import CanvasElement from "./canvas/CanvasElement";
+
+interface EditorCanvasProps {
+  page: PhotobookPage;
+  zoomLevel: number;
+  selectedElementId: string | null;
+  activeTool: EditorTool;
+  onSelectElement: (id: string | null) => void;
+  onUpdateElement: (id: string, changes: Partial<PageElement>) => void;
+  onDeleteElement: (id: string) => void;
+  onDropPhoto: (src: string, x: number, y: number) => void;
+}
+
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 600;
+
+export default function EditorCanvas({
+  page,
+  zoomLevel,
+  selectedElementId,
+  activeTool,
+  onSelectElement,
+  onUpdateElement,
+  onDeleteElement,
+  onDropPhoto,
+}: EditorCanvasProps) {
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    elementId: string;
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+  } | null>(null);
+
+  const handleCanvasClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target === canvasRef.current) {
+        onSelectElement(null);
+      }
+    },
+    [onSelectElement]
+  );
+
+  const handleElementMouseDown = useCallback(
+    (e: React.MouseEvent, element: PageElement) => {
+      if (activeTool !== "select") return;
+      e.stopPropagation();
+      onSelectElement(element.id);
+
+      dragRef.current = {
+        elementId: element.id,
+        startX: e.clientX,
+        startY: e.clientY,
+        origX: element.x,
+        origY: element.y,
+      };
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        if (!dragRef.current) return;
+        const dx = (moveEvent.clientX - dragRef.current.startX) / zoomLevel;
+        const dy = (moveEvent.clientY - dragRef.current.startY) / zoomLevel;
+
+        // Convert pixel delta to percentage
+        const pctX = (dx / CANVAS_WIDTH) * 100;
+        const pctY = (dy / CANVAS_HEIGHT) * 100;
+
+        onUpdateElement(dragRef.current.elementId, {
+          x: dragRef.current.origX + pctX,
+          y: dragRef.current.origY + pctY,
+        });
+      };
+
+      const handleMouseUp = () => {
+        dragRef.current = null;
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      };
+
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    },
+    [activeTool, zoomLevel, onSelectElement, onUpdateElement]
+  );
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const src = e.dataTransfer.getData("text/photo-url");
+      if (!src || !canvasRef.current) return;
+
+      const rect = canvasRef.current.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      onDropPhoto(src, x, y);
+    },
+    [onDropPhoto]
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const bgStyle = (() => {
+    const bg = page.background;
+    if (bg.type === "gradient" && bg.secondaryValue) {
+      return {
+        background: `linear-gradient(${bg.gradientAngle || 180}deg, ${bg.value}, ${bg.secondaryValue})`,
+      };
+    }
+    return { backgroundColor: bg.value };
+  })();
+
+  return (
+    <div className="w-full h-full flex items-center justify-center overflow-auto p-8 bg-muted">
+      <div
+        ref={canvasRef}
+        onClick={handleCanvasClick}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        className="relative rounded-2xl"
+        style={{
+          width: CANVAS_WIDTH,
+          height: CANVAS_HEIGHT,
+          transform: `scale(${zoomLevel})`,
+          transformOrigin: "center center",
+          boxShadow: "0 16px 48px hsl(9 97% 45% / 0.16)",
+          ...bgStyle,
+        }}
+      >
+        {page.elements.map((element) => (
+          <CanvasElement
+            key={element.id}
+            element={element}
+            isSelected={element.id === selectedElementId}
+            canvasWidth={CANVAS_WIDTH}
+            canvasHeight={CANVAS_HEIGHT}
+            onMouseDown={(e) => handleElementMouseDown(e, element)}
+            onResize={onUpdateElement}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// --- Canvas Element Renderer ---
+
+interface CanvasElementProps {
+  element: PageElement;
+  isSelected: boolean;
+  canvasWidth: number;
+  canvasHeight: number;
+  onMouseDown: (e: React.MouseEvent) => void;
+  onResize?: (id: string, changes: Partial<PageElement>) => void;
+}
+
+function CanvasElement({
+  element,
+  isSelected,
+  canvasWidth,
+  canvasHeight,
+  onMouseDown,
+  onResize,
+}: CanvasElementProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState("");
+  const [isCropping, setIsCropping] = useState(false);
+  const [cropState, setCropState] = useState({ x: 50, y: 50, zoom: 1 });
+  const editRef = useRef<HTMLDivElement>(null);
+  const cropDragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+  const handleResizeMouseDown = useCallback(
+    (e: React.MouseEvent, handle: string) => {
+      if (!onResize) return;
+      e.stopPropagation();
+
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startWidth = element.width;
+      const startHeight = element.height;
+      const startLeft = element.x;
+      const startTop = element.y;
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+
+        // Convert pixel delta to percentage
+        const pctDx = (dx / canvasWidth) * 100;
+        const pctDy = (dy / canvasHeight) * 100;
+
+        const updates: Partial<PageElement> = {};
+
+        // Calculate new dimensions based on handle
+        if (handle.includes("e")) {
+          updates.width = Math.max(5, startWidth + pctDx);
+        }
+        if (handle.includes("w")) {
+          const newWidth = Math.max(5, startWidth - pctDx);
+          updates.width = newWidth;
+          updates.x = startLeft + (startWidth - newWidth);
+        }
+        if (handle.includes("s")) {
+          updates.height = Math.max(5, startHeight + pctDy);
+        }
+        if (handle.includes("n")) {
+          const newHeight = Math.max(5, startHeight - pctDy);
+          updates.height = newHeight;
+          updates.y = startTop + (startHeight - newHeight);
+        }
+
+        onResize(element.id, updates);
+      };
+
+      const handleMouseUp = () => {
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      };
+
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    },
+    [element, canvasWidth, canvasHeight, onResize]
+  );
+
+  const style: React.CSSProperties = {
+    position: "absolute",
+    left: `${element.x}%`,
+    top: `${element.y}%`,
+    width: `${element.width}%`,
+    height: `${element.height}%`,
+    transform: element.rotation ? `rotate(${element.rotation}deg)` : undefined,
+    zIndex: element.zIndex,
+    opacity: element.opacity,
+    cursor: "move",
+  };
+
+  const renderResizeHandles = () => {
+    if (!isSelected) return null;
+
+    const handles = [
+      { pos: "nw", cursor: "nwse-resize", style: { top: -4, left: -4 } },
+      { pos: "n", cursor: "ns-resize", style: { top: -4, left: "50%", transform: "translateX(-50%)" } },
+      { pos: "ne", cursor: "nesw-resize", style: { top: -4, right: -4 } },
+      { pos: "e", cursor: "ew-resize", style: { top: "50%", right: -4, transform: "translateY(-50%)" } },
+      { pos: "se", cursor: "nwse-resize", style: { bottom: -4, right: -4 } },
+      { pos: "s", cursor: "ns-resize", style: { bottom: -4, left: "50%", transform: "translateX(-50%)" } },
+      { pos: "sw", cursor: "nesw-resize", style: { bottom: -4, left: -4 } },
+      { pos: "w", cursor: "ew-resize", style: { top: "50%", left: -4, transform: "translateY(-50%)" } },
+    ];
+
+    return (
+      <>
+        {handles.map((handle) => (
+          <div
+            key={handle.pos}
+            onMouseDown={(e) => handleResizeMouseDown(e, handle.pos)}
+            className="absolute w-2 h-2 bg-white border border-primary rounded-sm hover:bg-primary/20 transition-colors"
+            style={{ ...handle.style, cursor: handle.cursor, zIndex: 1000 }}
+          />
+        ))}
+      </>
+    );
+  };
+
+  if (element.type === "photo") {
+    const photo = element as PhotoElement;
+    const filterStyle = photo.filter
+      ? `brightness(${photo.filter.brightness}%) contrast(${photo.filter.contrast}%) saturate(${photo.filter.saturation}%)`
+      : undefined;
+
+    const photoStyle = isSelected
+      ? { ...style, '--tw-ring-color': 'hsl(9 97% 45%)' } as React.CSSProperties
+      : style;
+
+    const handleDoubleClickPhoto = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setIsCropping(true);
+      setCropState({
+        x: photo.cropX ?? 50,
+        y: photo.cropY ?? 50,
+        zoom: photo.cropZoom ?? 1,
+      });
+    };
+
+    const handleCropMouseDown = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      cropDragRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        origX: cropState.x,
+        origY: cropState.y,
+      };
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        if (!cropDragRef.current) return;
+        const dx = moveEvent.clientX - cropDragRef.current.startX;
+        const dy = moveEvent.clientY - cropDragRef.current.startY;
+
+        // Convert to percentage movement (inverted for natural feel)
+        const pctDx = -(dx / canvasWidth) * 100 / cropState.zoom;
+        const pctDy = -(dy / canvasHeight) * 100 / cropState.zoom;
+
+        setCropState(prev => ({
+          ...prev,
+          x: Math.max(0, Math.min(100, cropDragRef.current!.origX + pctDx)),
+          y: Math.max(0, Math.min(100, cropDragRef.current!.origY + pctDy)),
+        }));
+      };
+
+      const handleMouseUp = () => {
+        cropDragRef.current = null;
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    };
+
+    const handleCropSave = () => {
+      if (onResize) {
+        onResize(element.id, {
+          cropX: cropState.x,
+          cropY: cropState.y,
+          cropZoom: cropState.zoom,
+        } as Partial<PageElement>);
+      }
+      setIsCropping(false);
+    };
+
+    const handleCropCancel = () => {
+      setIsCropping(false);
+      setCropState({
+        x: photo.cropX ?? 50,
+        y: photo.cropY ?? 50,
+        zoom: photo.cropZoom ?? 1,
+      });
+    };
+
+    if (isCropping) {
+      return (
+        <div style={photoStyle} className="overflow-hidden relative ring-2 ring-primary">
+          <div
+            onMouseDown={handleCropMouseDown}
+            className="w-full h-full cursor-move relative"
+          >
+            <img
+              src={photo.src}
+              alt=""
+              draggable={false}
+              className="w-full h-full object-cover pointer-events-none"
+              style={{
+                filter: filterStyle,
+                objectPosition: `${cropState.x}% ${cropState.y}%`,
+                transform: `scale(${cropState.zoom})`,
+              }}
+            />
+          </div>
+          {/* Crop controls */}
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur-sm rounded-lg px-3 py-2 flex items-center gap-3 shadow-lg border border-border/60">
+            <label className="text-xs text-muted-foreground">Zoom:</label>
+            <input
+              type="range"
+              min="1"
+              max="3"
+              step="0.1"
+              value={cropState.zoom}
+              onChange={(e) => setCropState(prev => ({ ...prev, zoom: parseFloat(e.target.value) }))}
+              className="w-24"
+            />
+            <span className="text-xs font-medium text-foreground">{Math.round(cropState.zoom * 100)}%</span>
+            <div className="w-px h-4 bg-border/60" />
+            <button
+              onClick={handleCropSave}
+              className="text-xs font-semibold px-3 py-1 rounded-md bg-primary text-white hover:bg-primary/90"
+            >
+              Opslaan
+            </button>
+            <button
+              onClick={handleCropCancel}
+              className="text-xs font-semibold px-3 py-1 rounded-md hover:bg-muted"
+            >
+              Annuleren
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        style={photoStyle}
+        onMouseDown={onMouseDown}
+        onDoubleClick={handleDoubleClickPhoto}
+        className={cn(
+          "overflow-hidden relative",
+          isSelected && "ring-2 ring-offset-1"
+        )}
+      >
+        <img
+          src={photo.src}
+          alt=""
+          draggable={false}
+          className="w-full h-full object-cover pointer-events-none"
+          style={{
+            filter: filterStyle,
+            objectPosition: `${photo.cropX ?? 50}% ${photo.cropY ?? 50}%`,
+            transform: photo.cropZoom ? `scale(${photo.cropZoom})` : undefined,
+          }}
+        />
+        {renderResizeHandles()}
+      </div>
+    );
+  }
+
+  if (element.type === "text") {
+    const text = element as TextElement;
+    const textStyle: React.CSSProperties = {
+      ...style,
+      fontFamily: text.fontFamily,
+      fontSize: text.fontSize,
+      fontWeight: text.fontWeight,
+      color: text.color,
+      textAlign: text.textAlign,
+      lineHeight: text.lineHeight,
+      display: "flex",
+      alignItems: "center",
+      justifyContent:
+        text.textAlign === "center"
+          ? "center"
+          : text.textAlign === "right"
+            ? "flex-end"
+            : "flex-start",
+      ...(isSelected ? { '--tw-ring-color': 'hsl(9 97% 45%)' } as any : {}),
+    };
+
+    const handleDoubleClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setIsEditing(true);
+      setEditContent(text.content);
+      setTimeout(() => {
+        if (editRef.current) {
+          editRef.current.focus();
+          // Select all text
+          const range = document.createRange();
+          range.selectNodeContents(editRef.current);
+          const sel = window.getSelection();
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+        }
+      }, 0);
+    };
+
+    const handleBlur = () => {
+      if (isEditing && onResize) {
+        onResize(element.id, { content: editContent } as Partial<PageElement>);
+        setIsEditing(false);
+      }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleBlur();
+      }
+      if (e.key === "Escape") {
+        setIsEditing(false);
+        setEditContent(text.content);
+      }
+    };
+
+    return (
+      <div
+        style={textStyle}
+        onMouseDown={isEditing ? undefined : onMouseDown}
+        onDoubleClick={isEditing ? undefined : handleDoubleClick}
+        className={cn(
+          "whitespace-pre-wrap relative",
+          !isEditing && "select-none",
+          isSelected && "ring-2 ring-offset-1"
+        )}
+      >
+        {isEditing ? (
+          <div
+            ref={editRef}
+            contentEditable
+            suppressContentEditableWarning
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            onInput={(e) => setEditContent(e.currentTarget.textContent || "")}
+            className="outline-none w-full h-full"
+            style={{ cursor: "text" }}
+          >
+            {text.content}
+          </div>
+        ) : (
+          text.content
+        )}
+        {!isEditing && renderResizeHandles()}
+      </div>
+    );
+  }
+
+  return null;
+}
