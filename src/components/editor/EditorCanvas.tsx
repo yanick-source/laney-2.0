@@ -243,43 +243,50 @@ export default function EditorCanvas({
           ...bgStyle,
         }}
       >
-        {/* Render layout slot placeholders if active layout is set (as visual guides) */}
-        {activeLayout && activeLayout.slots.map((slot) => {
-          const assignedPhotoId = slotAssignments[slot.id];
-          // Only render placeholder if slot is empty
-          if (!assignedPhotoId) {
-            return (
-              <div
-                key={`placeholder-${slot.id}`}
-                className="absolute border-2 border-dashed border-muted-foreground/30 rounded-lg pointer-events-none"
-                style={{
-                  left: `${slot.x}%`,
-                  top: `${slot.y}%`,
-                  width: `${slot.width}%`,
-                  height: `${slot.height}%`,
-                }}
-              >
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground/40 text-xs">
-                  Slot
-                </div>
-              </div>
-            );
-          }
-          return null;
-        })}
+        {/* Render layout slots if active layout is set */}
+        {activeLayout ? (
+          activeLayout.slots.map((slot) => {
+            const assignedPhotoId = slotAssignments[slot.id];
+            const photo = assignedPhotoId
+              ? (page.elements.find((el) => el.id === assignedPhotoId) as PhotoElementType | undefined)
+              : null;
 
-        {/* Always render all elements in free-form mode */}
-        {page.elements.map((element) => (
-          <CanvasElement
-            key={element.id}
-            element={element}
-            isSelected={selectedElementIds.includes(element.id)}
-            canvasWidth={CANVAS_WIDTH}
-            canvasHeight={CANVAS_HEIGHT}
-            onMouseDown={(e) => handleElementMouseDown(e, element)}
-            onResize={onUpdateElement}
-          />
-        ))}
+            return (
+              <PhotoSlot
+                key={slot.id}
+                slotId={slot.id}
+                slot={slot}
+                photo={photo || null}
+                isSelected={assignedPhotoId ? selectedElementIds.includes(assignedPhotoId) : false}
+                canvasWidth={CANVAS_WIDTH}
+                canvasHeight={CANVAS_HEIGHT}
+                onMouseDown={(e) => {
+                  if (photo) {
+                    handleElementMouseDown(e, photo);
+                  }
+                }}
+                onResize={onUpdateElement}
+                onPlaceholderClick={() => {
+                  // Open photo picker - for now just log
+                  console.log("Open photo picker for slot:", slot.id);
+                }}
+              />
+            );
+          })
+        ) : (
+          // Render free-form elements when no layout is active
+          page.elements.map((element) => (
+            <CanvasElement
+              key={element.id}
+              element={element}
+              isSelected={selectedElementIds.includes(element.id)}
+              canvasWidth={CANVAS_WIDTH}
+              canvasHeight={CANVAS_HEIGHT}
+              onMouseDown={(e) => handleElementMouseDown(e, element)}
+              onResize={onUpdateElement}
+            />
+          ))
+        )}
 
         {/* Alignment Guides */}
         {guides.map((guide, idx) => (
