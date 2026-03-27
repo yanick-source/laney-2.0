@@ -21,8 +21,8 @@ if (!isGeminiConfigured) {
 
 const defaultConfig: GeminiConfig = {
   apiKey: GEMINI_API_KEY,
-  model: "gemini-2.0-flash",
-  visionModel: "gemini-2.0-flash",
+  model: "gemini-1.5-flash",
+  visionModel: "gemini-1.5-flash",
   imageModel: "imagen-3",
 };
 
@@ -209,11 +209,11 @@ export async function generateImage(
   return { data: imageUrl, usage };
 }
 
-// Fallback: use Gemini 2.0 Flash with image generation capability
+// Fallback: use Gemini 1.5 Flash with image generation capability
 async function generateImageFallback(
   request: GeminiImageRequest
 ): Promise<GeminiResponse<string>> {
-  const url = `${GEMINI_BASE_URL}/models/gemini-2.0-flash-exp:generateContent?key=${defaultConfig.apiKey}`;
+  const url = `${GEMINI_BASE_URL}/models/gemini-1.5-flash:generateContent?key=${defaultConfig.apiKey}`;
 
   const body = {
     contents: [
