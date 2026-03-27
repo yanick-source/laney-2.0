@@ -9,7 +9,7 @@ import type {
 import { costTracker } from "./cost-tracker";
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
-const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
+const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1";
 
 export const isGeminiConfigured = !!GEMINI_API_KEY;
 
@@ -22,7 +22,7 @@ if (!isGeminiConfigured) {
 const defaultConfig: GeminiConfig = {
   apiKey: GEMINI_API_KEY,
   model: "gemini-1.5-flash",
-  visionModel: "gemini-1.5-flash",
+  visionModel: "gemini-1.5-flash", 
   imageModel: "imagen-3",
 };
 
