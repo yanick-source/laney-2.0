@@ -82,6 +82,22 @@ export default function ProcessingPage() {
 
     async function run() {
       try {
+        // Quick API test first
+        console.log("🔄 Testing Gemini API before processing...");
+        const { generateText, isGeminiConfigured } = await import("@/integrations/gemini/client");
+        
+        if (!isGeminiConfigured) {
+          throw new Error("Gemini API key not configured. Check your .env file.");
+        }
+
+        const testResponse = await generateText({
+          prompt: "Respond with exactly: 'API working'",
+          maxOutputTokens: 10,
+        });
+        
+        console.log("✅ Gemini API test passed:", testResponse.data);
+
+        // Now run the full processing
         const result: ProcessingResult = await processSession(sessionId!, handleProgress);
         if (!cancelled) {
           navigate(`/editor/${result.bookId}`);
@@ -89,7 +105,18 @@ export default function ProcessingPage() {
       } catch (err) {
         if (!cancelled) {
           console.error("Processing failed:", err);
-          setError(err instanceof Error ? err.message : "Processing failed");
+          const errorMessage = err instanceof Error ? err.message : "Processing failed";
+          
+          // Provide specific error guidance
+          if (errorMessage.includes("403") || errorMessage.includes("401")) {
+            setError("API Key Error: Your Gemini API key is invalid or revoked. Please get a new key from Google AI Studio and update your .env file.");
+          } else if (errorMessage.includes("429")) {
+            setError("Rate Limit Error: Too many requests. Please wait a moment and try again.");
+          } else if (errorMessage.includes("configured")) {
+            setError("Configuration Error: Please check your .env file and ensure VITE_GEMINI_API_KEY is set.");
+          } else {
+            setError(errorMessage);
+          }
         }
       }
     }
