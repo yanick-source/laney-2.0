@@ -9,7 +9,7 @@ import type {
 import { costTracker } from "./cost-tracker";
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
-const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1";
+const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 
 export const isGeminiConfigured = !!GEMINI_API_KEY;
 
@@ -21,8 +21,8 @@ if (!isGeminiConfigured) {
 
 const defaultConfig: GeminiConfig = {
   apiKey: GEMINI_API_KEY,
-  model: "gemini-3.0-flash",
-  visionModel: "gemini-3.0-flash", 
+  model: "gemini-3-flash",
+  visionModel: "gemini-3-flash", 
   imageModel: "imagen-3",
 };
 
@@ -209,11 +209,11 @@ export async function generateImage(
   return { data: imageUrl, usage };
 }
 
-// Fallback: use Gemini 3.0 Flash with image generation capability
+// Fallback: use Gemini 3 Flash with image generation capability
 async function generateImageFallback(
   request: GeminiImageRequest
 ): Promise<GeminiResponse<string>> {
-  const url = `${GEMINI_BASE_URL}/models/gemini-3.0-flash:generateContent?key=${defaultConfig.apiKey}`;
+  const url = `${GEMINI_BASE_URL}/models/gemini-3-flash:generateContent?key=${defaultConfig.apiKey}`;
 
   const body = {
     contents: [
