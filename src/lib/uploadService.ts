@@ -179,7 +179,7 @@ export async function getSessionPhotos(
     .order("created_at", { ascending: true });
 
   if (error) throw new Error(`Failed to fetch photos: ${error.message}`);
-  return (data || []).map((p: Record<string, any>) => ({
+  return (data || []).map((p: any) => ({
     id: p.id,
     url: p.url,
     name: p.name,

@@ -17,8 +17,10 @@ import {
   ArrowDown,
 } from "lucide-react";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { useLayoutManager } from "@/hooks/useLayoutManager";
 import { useEditorStore } from "@/stores/editorStore";
 import { useHistoryStore } from "@/stores/historyStore";
+import { useUploadStore } from "@/stores/uploadStore";
 import { demoBooks } from "@/lib/processingService";
 import EditorCanvas from "@/components/editor/EditorCanvas";
 import ToolSidebar from "@/components/editor/ToolSidebar";
@@ -62,6 +64,8 @@ export default function EditorPage() {
   } = useEditorStore();
 
   const { undo, redo, canUndo, canRedo } = useHistoryStore();
+  const { photos: uploadedPhotos } = useUploadStore();
+  const layoutManager = useLayoutManager();
 
   // Load book data
   useEffect(() => {
@@ -83,10 +87,24 @@ export default function EditorPage() {
     setZoom(zoomPercent / 100);
   }, [zoomPercent, setZoom]);
 
-  // Collect unique photos across all pages for the tool sidebar
+  // Collect unique photos from both uploaded photos and page elements for the tool sidebar
   const allPhotos = useMemo(() => {
     const seen = new Set<string>();
     const result: Array<{ id: string; url: string; name: string }> = [];
+    
+    // Add uploaded photos first
+    uploadedPhotos.forEach((photo) => {
+      if (photo.url && !seen.has(photo.url)) {
+        seen.add(photo.url);
+        result.push({
+          id: photo.id,
+          url: photo.url,
+          name: photo.name || `Foto ${result.length + 1}`,
+        });
+      }
+    });
+    
+    // Add photos already on pages
     for (const page of pages) {
       for (const el of page.elements) {
         if (el.type === "photo") {
@@ -103,7 +121,7 @@ export default function EditorPage() {
       }
     }
     return result;
-  }, [pages]);
+  }, [pages, uploadedPhotos]);
 
   const currentPage = pages[currentPageIndex];
   const totalPages = pages.length;
@@ -327,7 +345,9 @@ export default function EditorPage() {
           onDropPhoto={(src) => addPhoto(src, 10, 10)}
           onAddText={(variant) => addText(variant)}
           onSetBackground={(bg: PageBackground) => setPageBackground(currentPageIndex, bg)}
-          onApplyLayout={(layoutId) => applyLayout(layoutId)}
+          onApplyLayout={(layoutId) => layoutManager.applyLayout(layoutId)}
+          onClearLayout={() => layoutManager.clearLayout()}
+          onApplyTemplate={(templateId) => layoutManager.applyTemplate(templateId)}
         />
 
         {/* CENTER — Canvas + Page Navigation */}
@@ -338,11 +358,16 @@ export default function EditorPage() {
             selectedElementId={selectedElementId}
             selectedElementIds={selectedElementIds}
             activeTool={activeTool}
+            photos={allPhotos}
+            activeLayout={layoutManager.activeLayout}
+            slotAssignments={layoutManager.slotAssignments}
             onSelectElement={selectElement}
             onToggleElementSelection={toggleElementSelection}
             onUpdateElement={updateElement}
             onDeleteElement={deleteElement}
             onDropPhoto={(src, x, y) => addPhoto(src, x, y)}
+            onAssignPhotoToSlot={layoutManager.assignPhotoToSlot}
+            onFindNearestSlot={layoutManager.findNearestSlot}
           />
 
           {/* Page Navigation Pill */}

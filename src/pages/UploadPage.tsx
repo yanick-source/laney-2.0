@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { BookHeart, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useUploadStore } from "@/stores/uploadStore";
 import { createSession, uploadAllPhotos } from "@/lib/uploadService";
 import { ACCEPTED_IMAGE_TYPES, MAX_FILE_SIZE, MAX_PHOTOS, MIN_PHOTOS } from "@/types/upload";
@@ -10,6 +10,7 @@ import type { PhotoFile } from "@/types/upload";
 import { generateId } from "@/lib/utils";
 import UploadDropzone from "@/components/UploadDropzone";
 import AIAssistantCard from "@/components/AIAssistantCard";
+import PageHeader from "@/components/ui/page-header";
 
 export default function UploadPage() {
   const navigate = useNavigate();
@@ -145,14 +146,7 @@ export default function UploadPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* ── Top Nav ── */}
-      <header className="sticky top-0 z-30 h-14 bg-background/80 backdrop-blur-sm border-b border-border/60 flex items-center px-6">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <BookHeart size={14} className="text-white" />
-          </div>
-          <span className="font-bold text-foreground tracking-tight">Laney</span>
-        </div>
-      </header>
+      <PageHeader />
 
       {/* ── Hero Section ── */}
       <section className="bg-gradient-to-b from-laney-peach via-laney-peach/50 to-background pt-12 pb-14 px-6">

@@ -5,15 +5,15 @@ import {
   Type,
   LayoutGrid,
   Palette,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PageBackground } from "@/types/editor";
 import { COLORS } from "@/types/editor";
 import { SNAP_LAYOUTS } from "@/lib/layouts";
-import { useLayoutManager } from "@/hooks/useLayoutManager";
-import { useEditorStore } from "@/stores/editorStore";
+import { TEMPLATES } from "@/lib/templates";
 
-type ToolId = "select" | "photos" | "text" | "layouts" | "backgrounds";
+type ToolId = "select" | "photos" | "text" | "layouts" | "backgrounds" | "templates";
 
 interface ToolDef {
   id: ToolId;
@@ -26,6 +26,7 @@ const TOOLS: ToolDef[] = [
   { id: "photos", icon: Image, label: "Foto's" },
   { id: "text", icon: Type, label: "Tekst" },
   { id: "layouts", icon: LayoutGrid, label: "Layout" },
+  { id: "templates", icon: Sparkles, label: "Templates" },
   { id: "backgrounds", icon: Palette, label: "Kleuren" },
 ];
 
@@ -35,6 +36,8 @@ interface ToolSidebarProps {
   onAddText: (variant: "heading" | "body") => void;
   onSetBackground: (bg: PageBackground) => void;
   onApplyLayout?: (layoutId: string) => void;
+  onClearLayout?: () => void;
+  onApplyTemplate?: (templateId: string) => void;
 }
 
 export default function ToolSidebar({
@@ -43,10 +46,11 @@ export default function ToolSidebar({
   onAddText,
   onSetBackground,
   onApplyLayout,
+  onClearLayout,
+  onApplyTemplate,
 }: ToolSidebarProps) {
   const [activeTool, setActiveTool] = useState<ToolId | null>("select");
   const [panelOpen, setPanelOpen] = useState(false);
-  const { applyLayout } = useLayoutManager();
 
   const handleToolClick = (toolId: ToolId) => {
     if (toolId === "select") {
@@ -159,7 +163,7 @@ export default function ToolSidebar({
                 {SNAP_LAYOUTS.map((layout: typeof SNAP_LAYOUTS[0]) => (
                   <button
                     key={layout.id}
-                    onClick={() => applyLayout(layout)}
+                    onClick={() => onApplyLayout?.(layout.id)}
                     className="aspect-square border border-border/60 rounded-xl p-2 transition-colors hover:border-primary/40 hover:bg-primary/5 flex items-center justify-center"
                     title={layout.name}
                   >
@@ -182,15 +186,49 @@ export default function ToolSidebar({
               </div>
               <button
                 onClick={() => {
-                  const store = useEditorStore.getState();
-                  store.setActiveLayout(null);
-                  store.setSlotAssignments({});
-                  store.setUnplacedPhotos([]);
+                  onClearLayout?.();
                 }}
                 className="w-full py-2 px-3 text-xs font-semibold rounded-lg bg-muted hover:bg-muted/80 transition-colors"
               >
                 ✕ Clear Layout (Free-form Mode)
               </button>
+            </div>
+          )}
+
+          {/* Templates Panel */}
+          {activeTool === "templates" && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                AI Templates
+              </p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Klik om een volledige look te laden inclusief kleuren, lettertype en decoraties.
+              </p>
+              <div className="space-y-2">
+                {TEMPLATES.map((tpl) => (
+                  <button
+                    key={tpl.id}
+                    onClick={() => onApplyTemplate?.(tpl.id)}
+                    className="w-full text-left border border-border/60 rounded-xl overflow-hidden transition-all hover:border-primary/50 hover:shadow-sm group"
+                  >
+                    {/* Color swatch preview */}
+                    <div
+                      className="h-10 w-full flex items-center justify-center text-xl"
+                      style={{ backgroundColor: tpl.theme.backgroundColor }}
+                    >
+                      <span>{tpl.emoji}</span>
+                    </div>
+                    <div className="px-3 py-2">
+                      <p className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors">
+                        {tpl.name}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+                        {tpl.description}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

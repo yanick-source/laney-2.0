@@ -12,13 +12,13 @@ import {
   BookMarked,
   Package,
   Sparkles,
-  BookHeart,
 } from "lucide-react";
 import PhaseCard from "@/components/PhaseCard";
 import type { PhaseStatus } from "@/components/PhaseCard";
 import { processSession } from "@/lib/processingService";
 import type { ProcessingResult } from "@/lib/processingService";
 import type { LucideIcon } from "lucide-react";
+import PageHeader from "@/components/ui/page-header";
 
 interface Phase {
   id: string;
@@ -134,14 +134,7 @@ export default function ProcessingPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Nav */}
-      <header className="h-14 bg-background/80 backdrop-blur-sm border-b border-border/60 flex items-center px-6">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <BookHeart size={14} className="text-white" />
-          </div>
-          <span className="font-bold text-foreground tracking-tight">Laney</span>
-        </div>
-      </header>
+      <PageHeader />
 
       {/* Hero band */}
       <div className="bg-gradient-to-b from-laney-peach/70 to-background pt-10 pb-8 px-6 text-center">

@@ -7,9 +7,11 @@ import type {
 } from "@/types/editor";
 import CanvasElement from "./canvas/CanvasElement";
 import PhotoSlot from "./canvas/PhotoSlot";
-import { useLayoutManager } from "@/hooks/useLayoutManager";
+import ContextMenu from "./ContextMenu";
+import PhotoPickerModal from "./PhotoPickerModal";
 import { useAlignmentGuides } from "@/hooks/useAlignmentGuides";
 import { useEditorStore } from "@/stores/editorStore";
+import type { LayoutDefinition } from "@/lib/layouts";
 
 interface EditorCanvasProps {
   page: PhotobookPage;
@@ -17,11 +19,16 @@ interface EditorCanvasProps {
   selectedElementId: string | null;
   selectedElementIds: string[];
   activeTool: EditorTool;
+  photos: Array<{ id: string; url: string; name: string }>;
+  activeLayout: LayoutDefinition | null;
+  slotAssignments: Record<string, string | null>;
   onSelectElement: (id: string | null) => void;
   onToggleElementSelection: (id: string) => void;
   onUpdateElement: (id: string, changes: Partial<PageElement>) => void;
   onDeleteElement: (id: string) => void;
   onDropPhoto: (src: string, x: number, y: number) => void;
+  onAssignPhotoToSlot: (photoId: string, slotId: string) => void;
+  onFindNearestSlot: (x: number, y: number) => string | null;
 }
 
 const CANVAS_WIDTH = 800;
@@ -33,11 +40,16 @@ export default function EditorCanvas({
   selectedElementId,
   selectedElementIds,
   activeTool,
+  photos,
+  activeLayout,
+  slotAssignments,
   onSelectElement,
   onToggleElementSelection,
   onUpdateElement,
   onDeleteElement,
   onDropPhoto,
+  onAssignPhotoToSlot,
+  onFindNearestSlot,
 }: EditorCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
@@ -55,7 +67,14 @@ export default function EditorCanvas({
     currentY: number;
   } | null>(null);
 
-  const { activeLayout, slotAssignments, findNearestSlot, assignPhotoToSlot } = useLayoutManager();
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    elementId: string;
+  } | null>(null);
+
+  const [photoPickerSlot, setPhotoPickerSlot] = useState<string | null>(null);
+
   const { guides, updateGuides, clearGuides } = useAlignmentGuides(CANVAS_WIDTH, CANVAS_HEIGHT);
 
   const handleCanvasMouseDown = useCallback(
@@ -116,6 +135,19 @@ export default function EditorCanvas({
       window.addEventListener("mouseup", handleMouseUp);
     },
     [activeTool, page.elements, onSelectElement]
+  );
+
+  const handleElementContextMenu = useCallback(
+    (e: React.MouseEvent, element: PageElement) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        elementId: element.id
+      });
+    },
+    []
   );
 
   const handleElementMouseDown = useCallback(
@@ -179,10 +211,10 @@ export default function EditorCanvas({
           const rect = canvasRef.current.getBoundingClientRect();
           const x = upEvent.clientX - rect.left;
           const y = upEvent.clientY - rect.top;
-          const nearestSlot = findNearestSlot(x, y, 50);
+          const nearestSlot = onFindNearestSlot(x, y);
           
           if (nearestSlot) {
-            assignPhotoToSlot(dragRef.current.elementId, nearestSlot);
+            onAssignPhotoToSlot(dragRef.current.elementId, nearestSlot);
           }
         }
 
@@ -194,7 +226,7 @@ export default function EditorCanvas({
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
     },
-    [activeTool, zoomLevel, onSelectElement, onUpdateElement, page.elements, updateGuides, clearGuides, activeLayout, findNearestSlot, assignPhotoToSlot]
+    [activeTool, zoomLevel, onSelectElement, onUpdateElement, page.elements, updateGuides, clearGuides, activeLayout, onFindNearestSlot, onAssignPhotoToSlot]
   );
 
   const handleDrop = useCallback(
@@ -246,15 +278,16 @@ export default function EditorCanvas({
         {/* Render layout slots if active layout is set */}
         {activeLayout ? (
           activeLayout.slots.map((slot) => {
-            const assignedPhotoId = slotAssignments[slot.id];
+            const slotId = slot.id;
+            const assignedPhotoId = slotAssignments[slotId];
             const photo = assignedPhotoId
               ? (page.elements.find((el) => el.id === assignedPhotoId) as PhotoElementType | undefined)
               : null;
 
             return (
               <PhotoSlot
-                key={slot.id}
-                slotId={slot.id}
+                key={slotId}
+                slotId={slotId}
                 slot={slot}
                 photo={photo || null}
                 isSelected={assignedPhotoId ? selectedElementIds.includes(assignedPhotoId) : false}
@@ -267,8 +300,7 @@ export default function EditorCanvas({
                 }}
                 onResize={onUpdateElement}
                 onPlaceholderClick={() => {
-                  // Open photo picker - for now just log
-                  console.log("Open photo picker for slot:", slot.id);
+                  setPhotoPickerSlot(slotId);
                 }}
               />
             );
@@ -276,15 +308,19 @@ export default function EditorCanvas({
         ) : (
           // Render free-form elements when no layout is active
           page.elements.map((element) => (
-            <CanvasElement
+            <div
               key={element.id}
-              element={element}
-              isSelected={selectedElementIds.includes(element.id)}
-              canvasWidth={CANVAS_WIDTH}
-              canvasHeight={CANVAS_HEIGHT}
-              onMouseDown={(e) => handleElementMouseDown(e, element)}
-              onResize={onUpdateElement}
-            />
+              onContextMenu={(e) => handleElementContextMenu(e, element)}
+            >
+              <CanvasElement
+                element={element}
+                isSelected={selectedElementIds.includes(element.id)}
+                canvasWidth={CANVAS_WIDTH}
+                canvasHeight={CANVAS_HEIGHT}
+                onMouseDown={(e) => handleElementMouseDown(e, element)}
+                onResize={onUpdateElement}
+              />
+            </div>
           ))
         )}
 
@@ -326,6 +362,75 @@ export default function EditorCanvas({
           />
         )}
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          onCopy={() => {
+            const element = page.elements.find(el => el.id === contextMenu.elementId);
+            if (element) {
+              navigator.clipboard.writeText(JSON.stringify(element));
+            }
+          }}
+          onDelete={() => onDeleteElement(contextMenu.elementId)}
+          onDuplicate={() => {
+            const element = page.elements.find(el => el.id === contextMenu.elementId);
+            if (element && element.type === 'photo') {
+              useEditorStore.getState().addPhoto(element.src, element.x + 2, element.y + 2);
+            } else if (element && element.type === 'text') {
+              useEditorStore.getState().addText();
+            }
+          }}
+          onBringForward={() => {
+            const element = page.elements.find(el => el.id === contextMenu.elementId);
+            if (element) {
+              onUpdateElement(contextMenu.elementId, { zIndex: element.zIndex + 1 });
+            }
+          }}
+          onSendBackward={() => {
+            const element = page.elements.find(el => el.id === contextMenu.elementId);
+            if (element) {
+              onUpdateElement(contextMenu.elementId, { zIndex: Math.max(1, element.zIndex - 1) });
+            }
+          }}
+          onBringToFront={() => {
+            const maxZ = Math.max(...page.elements.map(el => el.zIndex));
+            onUpdateElement(contextMenu.elementId, { zIndex: maxZ + 1 });
+          }}
+          onSendToBack={() => {
+            onUpdateElement(contextMenu.elementId, { zIndex: 1 });
+          }}
+        />
+      )}
+
+      {/* Photo Picker Modal */}
+      {photoPickerSlot && activeLayout && (
+        <PhotoPickerModal
+          photos={photos}
+          onSelectPhoto={(photoUrl) => {
+            const slot = activeLayout.slots.find((s) => s.id === photoPickerSlot);
+            if (!slot) { setPhotoPickerSlot(null); return; }
+
+            // Check if this photo URL already exists as an element on the page
+            const existing = page.elements.find(
+              (el) => el.type === 'photo' && (el as PhotoElementType).src === photoUrl
+            ) as PhotoElementType | undefined;
+
+            if (existing) {
+              onAssignPhotoToSlot(existing.id, photoPickerSlot);
+            } else {
+              // Create a new PhotoElement from the uploaded URL, then assign
+              const photoId = useEditorStore.getState().addPhoto(photoUrl, slot.x, slot.y);
+              if (photoId) onAssignPhotoToSlot(photoId, photoPickerSlot);
+            }
+            setPhotoPickerSlot(null);
+          }}
+          onClose={() => setPhotoPickerSlot(null)}
+        />
+      )}
     </div>
   );
 }

@@ -103,46 +103,46 @@ export async function processSession(
     onProgress?.("analyze", 50, "Using default analysis");
   }
 
-  // --- Step 3: Reorder using suggested_order from vision analysis (no API call) ---
-  onProgress?.("analyze", 60, "Ordering photo sequence...");
+  // --- Step 3: Semantic reordering ---
+  onProgress?.("analyze", 60, "Organizing photo sequence...");
   let reordered: WorkflowImage[];
   try {
     reordered = await reorderImages(preprocessed);
   } catch {
     reordered = preprocessed;
   }
-  onProgress?.("analyze", 100, "Analysis complete");
+  onProgress?.("analyze", 70, "Photo sequence organized");
 
-  // --- Step 4+5+8: Generate title + pages + closing in ONE text call ---
-  onProgress?.("layout", 10, "Creating your photo book...");
+  // --- Step 4: Generate title, pages, and closing title in one call ---
+  onProgress?.("layout", 10, "Creating your book content...");
   let title: string;
   let workflowPages: WorkflowPage[];
   let closingTitle: string;
   try {
-    const content = await generateAllContent(reordered, 3508, 2480, THEME);
-    title = content.title;
-    workflowPages = content.pages;
-    closingTitle = content.closingTitle;
-    onProgress?.("layout", 50, `"${title}" — ${workflowPages.length} pages created`);
+    const contentResult = await generateAllContent(reordered, 3508, 2480, THEME);
+    title = contentResult.title;
+    workflowPages = contentResult.pages;
+    closingTitle = contentResult.closingTitle;
   } catch (err) {
-    console.warn("Content generation failed, using simple grouping:", err);
+    console.warn("Content generation failed, using fallback:", err);
     title = "Beautiful Memories";
     workflowPages = simpleGrouping(reordered);
     closingTitle = "Until We Meet Again: A Journey of Beautiful Memories";
-    onProgress?.("layout", 50, "Using default layout");
   }
+  onProgress?.("layout", 30, `Title: "${title}"`);
+  onProgress?.("layout", 40, `Created ${workflowPages.length} pages`);
 
-  // --- Step 6: Even page enforcement (local, no API call) ---
-  onProgress?.("layout", 60, "Optimizing page count...");
+  // --- Step 6: Even page enforcement ---
+  onProgress?.("layout", 50, "Optimizing page count...");
   try {
     workflowPages = await makeEvenPages(workflowPages);
   } catch {
-    // Keep as-is
+    // Keep as-is if even page logic fails
   }
-  onProgress?.("layout", 70, `${workflowPages.length} pages (optimized)`);
+  onProgress?.("layout", 60, `${workflowPages.length} pages (optimized)`);
 
   // --- Step 7: Layout matching (aspect ratio optimization) ---
-  onProgress?.("layout", 80, "Matching optimal layouts...");
+  onProgress?.("layout", 70, "Matching optimal layouts...");
   workflowPages = assignLayoutsToPages(workflowPages, reordered);
   onProgress?.("layout", 100, "Layouts assigned");
 
@@ -160,6 +160,9 @@ export async function processSession(
     background = { type: "solid", value: "#F5F0EB" };
   }
   onProgress?.("generate", 40, "Background ready");
+
+  // --- Step 9: Closing title already generated in Step 4 ---
+  onProgress?.("generate", 50, "Closing title ready");
 
   // --- Step 10: Assemble final PhotobookPage[] ---
   onProgress?.("generate", 70, "Assembling your book...");
