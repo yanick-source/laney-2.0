@@ -424,7 +424,7 @@ export default function EditorCanvas({
             } else {
               // Create a new PhotoElement from the uploaded URL, then assign
               const photoId = useEditorStore.getState().addPhoto(photoUrl, slot.x, slot.y);
-              if (photoId) onAssignPhotoToSlot(photoId, photoPickerSlot);
+              if (photoId !== null) onAssignPhotoToSlot(photoId, photoPickerSlot);
             }
             setPhotoPickerSlot(null);
           }}

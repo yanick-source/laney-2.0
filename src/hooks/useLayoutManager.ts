@@ -75,7 +75,7 @@ export function useLayoutManager() {
         const photoUrl = uploadedPhotos[index].url || uploadedPhotos[index].preview;
         if (photoUrl) {
           const photoId = store.addPhoto(photoUrl, x, y);
-          if (photoId) {
+          if (photoId !== null) {
             // Re-read store after addPhoto to avoid stale state
             useEditorStore.getState().updateElement(photoId, {
               x, y, width, height,
