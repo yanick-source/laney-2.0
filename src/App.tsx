@@ -4,6 +4,8 @@ import UploadPage from "@/pages/UploadPage";
 import ProcessingPage from "@/pages/ProcessingPage";
 import EditorPage from "@/pages/EditorPage";
 import CheckoutPage from "@/pages/CheckoutPage";
+import PrintViewPage from "@/pages/PrintViewPage";
+import PrintCoverPage from "@/pages/PrintCoverPage";
 
 export default function App() {
   return (
@@ -16,6 +18,9 @@ export default function App() {
         <Route path="/:sessionId" element={<ProcessingPage />} />
         <Route path="/editor/:bookId" element={<EditorPage />} />
         <Route path="/checkout/:bookId" element={<CheckoutPage />} />
+        {/* Print-only routes — navigated to by Puppeteer on the print server */}
+        <Route path="/print-view/:jobId" element={<PrintViewPage />} />
+        <Route path="/print-cover/:jobId" element={<PrintCoverPage />} />
         <Route path="*" element={<Navigate to="/upload" replace />} />
       </Routes>
     </>
