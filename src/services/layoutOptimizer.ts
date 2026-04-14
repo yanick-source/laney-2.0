@@ -104,6 +104,7 @@ export function assignLayoutsToPages(
 ): WorkflowPage[] {
   const imageMap = new Map(images.map((img) => [img.id, img]));
   const totalPages = pages.length;
+  const usedLayouts = new Set<string>();
 
   return pages.map((page, index) => {
     // Extract image sizes for the current page
@@ -118,17 +119,71 @@ export function assignLayoutsToPages(
     const primaryFront = index === 0;
     const primaryBack = index === totalPages - 1;
 
-    // Find the best layout for the current page
-    const layoutId = findBestLayout(
-      imageSizes,
-      pageSize,
-      primaryFront,
-      primaryBack
-    );
+    // Get all suitable layouts sorted by deviation
+    const slotCount = imageSizes.length;
+    const layouts = getLayoutCandidates(slotCount);
+    
+    if (layouts.length === 0) {
+      const fallbackLayouts = LAYOUT_PRESETS.filter(
+        (l) => l.slots.length >= slotCount
+      );
+      if (fallbackLayouts.length > 0) {
+        return { ...page, layout_id: fallbackLayouts[0].id };
+      }
+      return { ...page, layout_id: "full" };
+    }
+
+    // Calculate aspect ratios and deviations for all layouts
+    const imageAspectRatios = imageSizes.map((s) => aspectRatio(s.width, s.height));
+    const layoutScores = layouts.map((layout) => {
+      const layoutAspectRatios = layout.slots.map((slot) =>
+        aspectRatio(slot.width, slot.height)
+      );
+      
+      let deviation = 0;
+      for (let i = 0; i < imageAspectRatios.length; i++) {
+        if (i < layoutAspectRatios.length) {
+          if (imageAspectRatios[i] >= 1) {
+            deviation += imageAspectRatios[i] - layoutAspectRatios[i];
+          } else {
+            deviation += Math.abs(imageAspectRatios[i] - layoutAspectRatios[i]);
+          }
+        }
+      }
+      deviation /= imageSizes.length;
+      
+      return { layoutId: layout.id, deviation };
+    });
+
+    // Sort by deviation (best matches first)
+    layoutScores.sort((a, b) => a.deviation - b.deviation);
+
+    // Pick from top 3 matches to add variety
+    // Prefer layouts not recently used
+    let selectedLayoutId = layoutScores[0].layoutId;
+    
+    // Try to find a good match that hasn't been used recently
+    const topMatches = layoutScores.slice(0, Math.min(3, layoutScores.length));
+    const unusedMatch = topMatches.find(score => !usedLayouts.has(score.layoutId));
+    
+    if (unusedMatch) {
+      selectedLayoutId = unusedMatch.layoutId;
+    } else if (topMatches.length > 1) {
+      // If all top matches were used, pick randomly from top 3
+      const randomIndex = Math.floor(Math.random() * topMatches.length);
+      selectedLayoutId = topMatches[randomIndex].layoutId;
+    }
+
+    // Track used layouts (clear every 3 pages to allow reuse)
+    usedLayouts.add(selectedLayoutId);
+    if (usedLayouts.size > 3) {
+      const firstUsed = Array.from(usedLayouts)[0];
+      usedLayouts.delete(firstUsed);
+    }
 
     return {
       ...page,
-      layout_id: layoutId || "full",
+      layout_id: selectedLayoutId,
     };
   });
 }

@@ -30,7 +30,7 @@ interface EditorStore extends EditorState {
 
   updateElement: (id: string, changes: Partial<PageElement>) => void;
   deleteElement: (id: string) => void;
-  addPhoto: (src: string, x: number, y: number) => void;
+  addPhoto: (src: string, x: number, y: number) => string | null;
   addText: (variant?: "heading" | "body") => void;
   setPageBackground: (index: number, bg: PageBackground) => void;
 
@@ -175,15 +175,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   addPhoto: (src, x, y) => {
     const { pages, currentPageIndex } = get();
     const page = pages[currentPageIndex];
-    if (!page) return;
+    if (!page) return null;
+    
+    // Use reasonable default size that fits well on canvas (20% of page width)
+    const defaultWidth = 20;
+    const defaultHeight = 15;
+    
     const photo: PhotoElement = {
       id: generateId(),
       type: "photo",
       src,
       x,
       y,
-      width: 300,
-      height: 200,
+      width: defaultWidth,
+      height: defaultHeight,
       rotation: 0,
       zIndex: page.elements.length + 1,
       opacity: 1,
@@ -198,6 +203,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     };
     useHistoryStore.getState().pushState(newPages);
     set({ pages: newPages, selectedElementId: photo.id, isDirty: true });
+    return photo.id;
   },
 
   addText: (variant = "body") => {

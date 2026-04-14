@@ -78,6 +78,9 @@ export interface PhotobookPage {
   elements: PageElement[];
   background: PageBackground;
   layoutId?: string;
+  activeLayoutId?: string | null;
+  slotAssignments?: Record<string, string | null>;
+  isFreeForm?: boolean;
 }
 
 // --- EDITOR STATE ---
