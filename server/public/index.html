@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Laney Print Server</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f4f0;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+    .container { max-width: 640px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: .25rem; }
+    .subtitle { color: #666; font-size: .9rem; margin-bottom: 2rem; }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 1.75rem;
+      box-shadow: 0 2px 12px rgba(0,0,0,.07);
+      margin-bottom: 1.5rem;
+    }
+    .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1.25rem; display: flex; align-items: center; gap: .5rem; }
+    label { display: block; font-size: .85rem; color: #555; margin-bottom: .35rem; margin-top: .9rem; }
+    label:first-of-type { margin-top: 0; }
+    input[type="text"] {
+      width: 100%; border: 1.5px solid #e0e0e0; border-radius: 10px;
+      padding: .6rem .9rem; font-size: .9rem; outline: none;
+      transition: border-color .15s;
+    }
+    input[type="text"]:focus { border-color: #d4a96a; }
+
+    /* Drop zone */
+    .dropzone {
+      border: 2px dashed #d0cdc7;
+      border-radius: 12px;
+      padding: 2.5rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: background .15s, border-color .15s;
+      margin-bottom: 1rem;
+    }
+    .dropzone.over { background: #fdf6ee; border-color: #d4a96a; }
+    .dropzone p { color: #888; font-size: .9rem; }
+    .dropzone strong { color: #d4a96a; }
+    input[type="file"] { display: none; }
+
+    .file-list { list-style: none; margin-bottom: 1rem; }
+    .file-list li {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .45rem .75rem; background: #f9f8f6; border-radius: 8px;
+      font-size: .85rem; margin-bottom: .35rem;
+    }
+    .file-list li span { color: #888; font-size: .8rem; }
+    .remove-btn { background: none; border: none; cursor: pointer; color: #ccc; font-size: 1rem; line-height: 1; }
+    .remove-btn:hover { color: #e55; }
+
+    button[type="submit"] {
+      width: 100%; padding: .85rem;
+      background: linear-gradient(135deg, #d4a96a, #c47a3a);
+      color: #fff; border: none; border-radius: 12px;
+      font-size: .95rem; font-weight: 600; cursor: pointer;
+      transition: opacity .15s;
+    }
+    button[type="submit"]:disabled { opacity: .55; cursor: not-allowed; }
+
+    /* Status */
+    .status {
+      border-radius: 12px; padding: 1rem 1.25rem;
+      font-size: .9rem; display: none; margin-top: 1rem;
+    }
+    .status.success { background: #edfaf3; color: #1a7a4a; display: block; }
+    .status.error   { background: #fdecea; color: #c0392b; display: block; }
+    .status.loading { background: #f0f4ff; color: #2a4a9a; display: block; }
+    .status pre { margin-top: .5rem; font-size: .8rem; white-space: pre-wrap; word-break: break-all; }
+
+    /* Health */
+    .health { font-size: .8rem; color: #aaa; text-align: right; margin-bottom: 1.5rem; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ccc; margin-right: 4px; }
+    .dot.ok { background: #2ecc71; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>🖨️ Laney Print Server</h1>
+  <p class="subtitle">Send files directly to the printer via SFTP or webhook.</p>
+  <div class="health"><span class="dot" id="dot"></span><span id="health-text">Checking…</span></div>
+
+  <div class="card">
+    <h2>📂 Send Files</h2>
+    <form id="upload-form">
+      <label>Order ID <small style="color:#aaa">(optional — auto-generated if empty)</small></label>
+      <input type="text" id="order-id" placeholder="e.g. ORD-20240414" />
+
+      <label>Notes <small style="color:#aaa">(optional)</small></label>
+      <input type="text" id="notes" placeholder="e.g. 200gsm gloss, hardcover" />
+
+      <label style="margin-top:1rem">Files</label>
+      <div class="dropzone" id="dropzone">
+        <p>Drag &amp; drop files here or <strong>click to browse</strong></p>
+        <p style="margin-top:.4rem;font-size:.8rem">PDF, JPG, PNG, JSON — up to 10 files, 200 MB each</p>
+        <input type="file" id="file-input" multiple accept=".pdf,.jpg,.jpeg,.png,.json" />
+      </div>
+      <ul class="file-list" id="file-list"></ul>
+
+      <button type="submit" id="submit-btn">Send to printer</button>
+    </form>
+    <div class="status" id="status"></div>
+  </div>
+</div>
+
+<script>
+  // ── Health check ──────────────────────────────────────────────────────────
+  fetch("/health").then(r => r.json()).then(() => {
+    document.getElementById("dot").classList.add("ok");
+    document.getElementById("health-text").textContent = "Server online";
+  }).catch(() => {
+    document.getElementById("health-text").textContent = "Server offline";
+  });
+
+  // ── Drag & drop ───────────────────────────────────────────────────────────
+  const dropzone  = document.getElementById("dropzone");
+  const fileInput = document.getElementById("file-input");
+  const fileList  = document.getElementById("file-list");
+  let selectedFiles = [];
+
+  dropzone.addEventListener("click", () => fileInput.click());
+  dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("over"); });
+  dropzone.addEventListener("dragleave",   () => dropzone.classList.remove("over"));
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("over");
+    addFiles([...e.dataTransfer.files]);
+  });
+  fileInput.addEventListener("change", () => addFiles([...fileInput.files]));
+
+  function addFiles(files) {
+    files.forEach(f => {
+      if (!selectedFiles.find(x => x.name === f.name && x.size === f.size)) {
+        selectedFiles.push(f);
+      }
+    });
+    renderFileList();
+  }
+
+  function renderFileList() {
+    fileList.innerHTML = "";
+    selectedFiles.forEach((f, i) => {
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <span>📄 ${f.name}</span>
+        <span>${(f.size / 1024).toFixed(1)} KB
+          <button class="remove-btn" data-i="${i}" title="Remove">✕</button>
+        </span>`;
+      fileList.appendChild(li);
+    });
+    fileList.querySelectorAll(".remove-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        selectedFiles.splice(parseInt(btn.dataset.i), 1);
+        renderFileList();
+      });
+    });
+  }
+
+  // ── Submit ────────────────────────────────────────────────────────────────
+  document.getElementById("upload-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (selectedFiles.length === 0) {
+      showStatus("error", "Please select at least one file.");
+      return;
+    }
+
+    const submitBtn = document.getElementById("submit-btn");
+    submitBtn.disabled = true;
+    showStatus("loading", `Sending ${selectedFiles.length} file(s)…`);
+
+    const formData = new FormData();
+    selectedFiles.forEach(f => formData.append("files", f));
+    formData.append("orderId", document.getElementById("order-id").value.trim());
+    formData.append("notes",   document.getElementById("notes").value.trim());
+
+    try {
+      const res  = await fetch("/api/send-files", { method: "POST", body: formData });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || "Unknown error");
+
+      const msg = data.savedTo
+        ? `✅ Files saved locally:\n${data.savedTo}`
+        : `✅ Sent to printer! Order ID: ${data.orderId} (${data.fileCount} file(s))`;
+      showStatus("success", msg);
+      selectedFiles = [];
+      renderFileList();
+      document.getElementById("order-id").value = "";
+      document.getElementById("notes").value = "";
+    } catch (err) {
+      showStatus("error", `❌ ${err.message}`);
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  function showStatus(type, msg) {
+    const el = document.getElementById("status");
+    el.className = `status ${type}`;
+    el.innerHTML = msg.includes("\n") ? `<pre>${msg}</pre>` : msg;
+  }
+</script>
+</body>
+</html>
